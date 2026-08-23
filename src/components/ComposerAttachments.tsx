@@ -7,16 +7,15 @@ import { ClipboardPaste, File as FileIcon, Image as ImageIcon, X } from "lucide-
 import { cn } from "@/lib/cn";
 import {
   attachmentBasename,
-  attachmentsFromDroppedFiles,
+  intakeFiles,
   formatSize,
   imageAttachmentFromFile,
-  isImageFile,
   pasteSummary,
   type Attachment,
 } from "@/lib/composer-attachments";
 
 /** Electron 32 removed File.path — only the preload can name a file. */
-function pathForFile(file: File): string {
+export function pathForFile(file: File): string {
   return window.ogb?.getPathForFile?.(file) ?? "";
 }
 
@@ -62,30 +61,16 @@ export function ComposerAttachments({
       depth.current = 0;
       setDragging(false);
       const files = Array.from(e.dataTransfer?.files ?? []);
-      const images = allowImages ? files.filter(isImageFile) : [];
-      const rest = files.filter((f) => !isImageFile(f));
-      const { attachments, rejectedNames } = await attachmentsFromDroppedFiles(rest, pathForFile);
-      const uploaded: Attachment[] = [];
-      const imageErrors: string[] = [];
-      for (const file of images) {
-        try {
-          const attachment = await imageAttachmentFromFile(file);
-          if (attachment) uploaded.push(attachment);
-        } catch (err) {
-          imageErrors.push(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
-        }
-      }
+      // Same intake the attach button uses: a dropped file and a picked one
+      // must not sort differently.
+      const { attachments, notice: message } = await intakeFiles(files, {
+        allowImages,
+        getPath: pathForFile,
+        uploadImage: imageAttachmentFromFile,
+      });
       if (!active) return;
-      if (attachments.length || uploaded.length) onAdd([...attachments, ...uploaded]);
-      setNotice(
-        rejectedNames.length && imageErrors.length
-          ? `${rejectedNames.join(", ")} — that drag carried no file on disk. Save it first, then drop it from Finder. (${imageErrors.join("; ")})`
-          : rejectedNames.length
-            ? `${rejectedNames.join(", ")} — that drag carried no file on disk. Save it first, then drop it from Finder.`
-            : imageErrors.length
-              ? imageErrors.join("; ")
-              : null,
-      );
+      if (attachments.length) onAdd(attachments);
+      setNotice(message);
     };
 
     window.addEventListener("dragenter", onEnter);
