@@ -137,10 +137,6 @@ export function Composer({
   // from must not keep blocking the composer
   const approvals = pendingApprovals(group ? group.messages : bot ? visibleMessages(bot) : []);
   const approval = approvals[0];
-  const approvalBot = group
-    ? members?.find((b) => b.id === approval?.message.from?.botId) ??
-      members?.find((b) => b.id === group.busyBotId)
-    : bot;
   const busyName = group
     ? (members?.find((b) => b.id === group.busyBotId)?.name ?? "A bot")
     : (bot?.name ?? "The bot");
@@ -419,7 +415,6 @@ export function Composer({
             <PendingApprovalActions
               pending={approval}
               threadId={threadId}
-              bot={approvalBot}
               onCancelTurn={() => {
                 if (group) dispatch({ type: "interruptGroup", groupId: group.id });
                 else if (bot) dispatch({ type: "interrupt", botId: bot.id });

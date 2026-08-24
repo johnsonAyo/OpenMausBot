@@ -8,7 +8,7 @@
 // (it scrolls instead), and the buttons ordered least-destructive-last so
 // the primary action sits under your thumb.
 import { memo } from "react";
-import { useStore, type Bot, type Message } from "@/state/store";
+import { useStore, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
 
 interface ApprovalLabels {
@@ -33,7 +33,6 @@ export function pendingApprovals(messages: Message[]): Pending[] {
       message: m,
       requestId: m.card!.requestId!,
       tool: m.card!.tool!,
-      allowKey: m.card!.allowKey,
       detail: m.card!.subtitle,
       held: m.card!.held,
     }));
@@ -84,24 +83,20 @@ export const PendingApprovalPanel = memo(function PendingApprovalPanel({
 export function PendingApprovalActions({
   pending,
   threadId,
-  bot,
   onCancelTurn,
 }: {
   pending: Pending;
   threadId: string;
-  /** who asked — "always allow" is remembered against them */
-  bot?: Bot;
   onCancelTurn: () => void;
 }) {
   const { dispatch } = useStore();
-  const decide = (behavior: "allow" | "deny", always = false) =>
+  const decide = (behavior: "allow" | "deny") =>
     dispatch({
       type: "decideRequest",
       threadId,
       requestId: pending.requestId,
       behavior,
       message: behavior === "deny" ? "Denied by the user." : undefined,
-      alwaysAllow: always && bot && pending.allowKey ? { botId: bot.id, key: pending.allowKey } : undefined,
     });
 
   const base = "rounded-full px-3.5 py-1.5 text-[13.5px] transition-colors";
@@ -116,15 +111,6 @@ export function PendingApprovalActions({
       >
         Deny
       </button>
-      {bot && pending.allowKey && (
-        <button
-          onClick={() => decide("allow", true)}
-          title={`Stop asking ${bot.name} about ${pending.allowKey}`}
-          className={cn(base, "border border-hairline/50 text-ink hover:bg-control")}
-        >
-          Always allow
-        </button>
-      )}
       <button
         onClick={() => decide("allow")}
         className={cn(base, "bg-accent font-medium text-white hover:brightness-110")}
