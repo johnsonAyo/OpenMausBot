@@ -640,6 +640,9 @@ function createWindow() {
   // Native context menu for text inputs — without this, right-click does
   // nothing in the Electron window (no Cut/Copy/Paste/Select All).
   win.webContents.on("context-menu", (_event, params) => {
+    // nothing actionable here — no menu at all, rather than a wall of
+    // disabled items
+    if (!params.isEditable && !params.linkURL && !params.misspelledWord && !params.selectionText) return;
     const menuItems = [];
     if (params.misspelledWord) {
       for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
@@ -667,7 +670,7 @@ function createWindow() {
       { type: "separator" },
       { label: "Select All", role: "selectAll", enabled: params.editFlags.canSelectAll },
     );
-    Menu.buildFromTemplate(menuItems).popup({ window: win });
+    Menu.buildFromTemplate(menuItems).popup({ window: win, frame: params.frame });
   });
 
   // Packaged CI smoke hook. It validates the real renderer/preload bridge and
