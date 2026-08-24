@@ -1,6 +1,6 @@
 import { track } from "@/lib/analytics";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Clock, Mic, Plus, Square, Users, X, Zap } from "lucide-react";
+import { ArrowUp, Check, Clock, Hand, Mic, Plus, ShieldCheck, Square, Users, X } from "lucide-react";
 import { useStore, visibleMessages, type Bot, type Group, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useComposerDraft } from "@/lib/drafts";
@@ -36,7 +36,74 @@ function mentionQueryAt(text: string, caret: number): { start: number; query: st
 
 type MentionChoice = { id: string; name: string; bot?: Bot };
 
+
+function PermissionModeSelector({ bot, onSetAuto }: { bot: Bot; onSetAuto: (auto: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const mode = bot.autoApprove ? "auto" : "ask";
+  const Icon = mode === "auto" ? ShieldCheck : Hand;
+  const label = mode === "auto" ? "Approve for me" : "Ask for approval";
+
+  return (
+    <div className="relative flex items-center" ref={wrapperRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-hairline/20 bg-transparent px-3 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
+      >
+        <Icon size={14} className="opacity-70" />
+        {label}
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 z-30 mb-2 w-80 overflow-hidden rounded-xl border border-hairline/40 bg-raised shadow-lg">
+          <div className="px-4 py-3 text-[13px] font-medium text-ink-secondary border-b border-hairline/20">
+            How should {bot.name} actions be approved?
+          </div>
+          <div className="flex flex-col py-1">
+            <button
+              onClick={() => { onSetAuto(false); setOpen(false); }}
+              className="flex items-start gap-3 px-4 py-3 text-left hover:bg-raised-hover"
+            >
+              <Hand size={16} className="mt-0.5 shrink-0 opacity-70" />
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center justify-between text-[14px] text-ink">
+                  Ask for approval
+                  {mode === "ask" && <Check size={14} />}
+                </div>
+                <div className="text-[13px] text-ink-secondary">Always ask to edit external files and use the internet</div>
+              </div>
+            </button>
+            <button
+              onClick={() => { onSetAuto(true); setOpen(false); }}
+              className="flex items-start gap-3 px-4 py-3 text-left hover:bg-raised-hover"
+            >
+              <ShieldCheck size={16} className="mt-0.5 shrink-0 opacity-70" />
+              <div className="flex flex-col gap-0.5 w-full">
+                <div className="flex items-center justify-between text-[14px] text-ink">
+                  Approve for me
+                  {mode === "auto" && <Check size={14} />}
+                </div>
+                <div className="text-[13px] text-ink-secondary">Only ask for actions detected as potentially unsafe</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Composer({
+
   bot,
   group,
   members,
@@ -187,17 +254,17 @@ export function Composer({
     // overlapping intake must not erase an earlier failure before it is read.
     if (notice) setAttachmentNotice(notice);
   };
-  const toggleAuto = () => {
+  const setAuto = (auto: boolean) => {
     if (!autoBot) return;
     // Turning it on for a bot that drives THIS computer is the one case that
     // has to be acknowledged first. The flag the dialog sends is stripped by
     // the reducer rather than stored, so — exactly like the settings panel —
     // the warning is shown on every switch-on, not just the first.
-    if (!autoBot.autoApprove && autoBot.computer === "local") {
+    if (auto && !autoBot.autoApprove && autoBot.computer === "local") {
       setAutoWarn(true);
       return;
     }
-    dispatch({ type: "updateBot", botId: autoBot.id, patch: { autoApprove: !autoBot.autoApprove } });
+    dispatch({ type: "updateBot", botId: autoBot.id, patch: { autoApprove: auto } });
   };
 
   const hasContent = Boolean(text.trim()) || attachments.length > 0;
@@ -285,7 +352,7 @@ export function Composer({
   };
 
   return (
-    <div className="px-5 pb-5 pt-2">
+    <div className="px-5 pb-3 pt-1">
       {speechError && (
         <div className="mx-auto mb-2 max-w-[900px] rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
           {speechError}
@@ -377,7 +444,7 @@ export function Composer({
           notice={attachmentNotice}
           onNotice={setAttachmentNotice}
         />
-        <div className="flex items-end gap-2 rounded-3xl border border-hairline/40 bg-raised/60 py-2 pl-2 pr-2">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 rounded-3xl border border-hairline/40 bg-raised/60 px-3 pb-2 pt-1">
         <input
           ref={fileInput}
           type="file"
@@ -390,14 +457,17 @@ export function Composer({
           }}
         />
         {!locked && (
+          <div className="col-start-1 row-start-2 mt-1 flex items-center gap-1">
           <button
             onClick={() => fileInput.current?.click()}
             aria-label="Attach a file"
             title="Attach a file"
-            className="flex size-8 shrink-0 items-center justify-center self-end rounded-full text-ink-secondary hover:bg-control hover:text-ink"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink"
           >
             <Plus size={18} />
           </button>
+          {bot && <PermissionModeSelector bot={bot} onSetAuto={setAuto} />}
+          </div>
         )}
         <textarea
           ref={inputRef}
@@ -497,30 +567,9 @@ export function Composer({
                   : `Message ${bot?.name ?? ""}`
           }
           aria-label={`Message ${group ? group.name : (bot?.name ?? "")}`}
-          className="max-h-40 w-full resize-none self-center bg-transparent py-1 text-[15px] leading-6 text-ink placeholder:text-ink-secondary focus:outline-none"
+          className="col-span-full row-start-1 max-h-60 min-h-[40px] w-full resize-none self-center bg-transparent px-1 pt-2.5 pb-0 text-[15px] leading-6 text-ink placeholder:text-ink-secondary focus:outline-none"
         />
-        {autoBot && !locked && (
-          <button
-            onClick={toggleAuto}
-            role="switch"
-            aria-checked={Boolean(autoBot.autoApprove)}
-            aria-label="Auto mode"
-            title={
-              autoBot.autoApprove
-                ? "Auto mode is on — this bot keeps going without asking. Anything destructive still stops for you."
-                : "Auto mode is off — you approve each action"
-            }
-            className={cn(
-              "flex shrink-0 items-center gap-1 self-end rounded-full px-2 py-1.5 text-[12.5px] font-medium",
-              autoBot.autoApprove
-                ? "bg-accent/15 text-accent-text"
-                : "text-ink-secondary hover:bg-control hover:text-ink",
-            )}
-          >
-            <Zap size={13} className={autoBot.autoApprove ? "fill-current" : undefined} />
-            Auto
-          </button>
-        )}
+        <div className="col-start-3 row-start-2 mt-1 flex items-center gap-1">
         {busy && !locked && (
           <button
             onClick={() => {
@@ -562,6 +611,7 @@ export function Composer({
             {busy && !canSteer ? <Clock size={15} /> : <ArrowUp size={17} />}
           </button>
         )}
+        </div>
         </div>
       </div>
       <LocalComputerAutoWarning
